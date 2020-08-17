@@ -25,12 +25,55 @@ eBPFプログラムはカーネル空間で実行されるが、そのプログ�
 
 [bpf(2)]: https://man7.org/linux/man-pages/man2/bpf.2.html
 
-# WIP 手書きでeBPF 算術命令
+# WIP 手書きでeBPF 命令のデータ型
 
 [前回]はeBPFのごく単純なプログラムを書いて実行可能なユーザ空間側のプログラムを作ることに専念した。
-今回は基本的な命令を試していく。
+今回は色々な命令を試していくにあたっての準備として、命令をRust上で作りやすいようにする。
 
-x86_64などの実際のプロセッサを使ったアセンブリプログラミングを嗜んでいる人にとっては何のことはない話なので読み飛ばし可。
+[Linux Socket Filtering aka Berkeley Packet Filter (BPF)]()
+
+を参考にする。
+
+## フォーマット
+
+eBPFの命令フォーマットは下記のように定義されている。
+
+```
+op:8, dst_reg:4, src_reg:4, off:16, imm:32
+```
+
+合計64bitで一つの命令を表し、これが配列として並べられたものをeBPFプログラムと呼ぶ。
+
+例えばC言語上で作った下記の命令があるとする。
+
+```c
+  struct bpf_insn insns[] = {
+    { BPF_ALU64 | BPF_MOV | BPF_K, 0, 0, 0, -1 },
+    { BPF_JMP | BPF_EXIT, 0, 0, 0, 0 }
+  };
+```
+これらをメモリ上で表現すると下記のようになる。
+```
+0x7fffffffe800: 0xb7    0x00    0x00    0x00    0xff    0xff    0xff    0xff
+0x7fffffffe808: 0x95    0x00    0x00    0x00    0x00    0x00    0x00    0x00
+```
+
+最初の `BPF_MOV` 命令をフィールドに分解すると下記のようになる。
+```
+0xb7    0x00    0x00    0x00    0xff    0xff    0xff    0xff
+|opcode |reg    |off            |imm                        |
+```
+
+カーネルはメモリに配置されたこのバイト列を64bitごとに命令として読みだしてverifierにかけていることになる。
+
+## 
+
+eBPFの命令は階層構造になっている
+
+
+
+program = { instruction }
+instruction = 
 
 ## 準備
 
@@ -41,6 +84,7 @@ Rustだと関数書いてinline attribute設定すればよさそう。
 ここではasmというモジュールに切り出しておく。
 
 [前回]: /posts/note/run-ebpf-socket-filter/
+[Linux Socket Filtering aka Berkeley Packet Filter (BPF)]: https://www.kernel.org/doc/Documentation/networking/filter.txt
 
 # WIP 手書きでeBPF ジャンプ
 

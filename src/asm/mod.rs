@@ -121,11 +121,6 @@ impl From<AluJmp> for Opcode {
   fn from(o: AluJmp) -> Self { Opcode(o.0) }
 }
 
-// impl Opcode {
-//   fn from_arith_jump(class: ) -> Opcdoe {}
-//   fn from_load_store() -> Opcode {}
-// }
-
 #[derive(Debug)]
 pub enum Src {
   K,
@@ -208,7 +203,7 @@ pub enum Jmp {
 impl Jmp {
   #[inline(always)]
   fn make(self, source: Src) -> AluJmp {
-    AluJmp(u8::from(self) | u8::from(source) | u8::from(Class::Alu64))
+    AluJmp(u8::from(self) | u8::from(source) | u8::from(Class::Jmp64))
   }
 }
 

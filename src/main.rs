@@ -203,9 +203,9 @@ fn setsockopt<O>(sock: &RawFd, opt: O) -> Result<()>
 fn immediate_exit() -> Vec<asm::Insn> {
   vec![
     // BPF_MOV64_IMM(BPF_REG_0, -1),
-    asm::Insn{ op: 0x07 | 0xb0 | 0x00, reg: 0, off: 0, imm: (!1 + 1)},
+    asm::Insn::new(asm::Opcode::Alu64(asm::Alu::Mov, asm::Src::K), asm::Reg::R0, asm::Reg::R0, 0, !1 + 1),
     // BPF_EXIT
-    asm::Insn{ op: 0x05 | 0x90, reg: 0, off: 0, imm: 0 },
+    asm::Insn::new(asm::Opcode::Jmp(asm::Jmp::Exit, asm::Src::K), asm::Reg::R0, asm::Reg::R0, 0, 0)
   ]
 }
 

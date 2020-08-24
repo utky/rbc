@@ -10,27 +10,26 @@ pub struct Insn {
 }
 
 impl Insn {
-  pub fn new<O>(op: O, dst_reg: Reg, src_reg: Reg, off: u16, imm: u32) -> Insn
-    where O: Into<Opcode> {
+  pub fn new(op: Opcode, dst_reg: Reg, src_reg: Reg, off: u16, imm: u32) -> Insn {
     Insn {
-      op: op.into().0,
-      reg: (dst_reg as u8) << 4 | src_reg as u8,
+      op: u8::from(op),
+      reg: u8::from(dst_reg) << 4 | u8::from(src_reg),
       off: off,
       imm: imm
     }
   }
 
-  pub fn serialize(self) -> [u8; 8] {
-    let opreg: [u8; 2] = [ self.op, self.reg ];
-    let mut off: [u8; 2];
-    let mut imm: [u8; 4];
-    [1 .. 0].iter().for_each(|i|
-      off.insert(i, (self.off & (0xFF << i * 8)) >> (i * 8))
-    );
-    [3 .. 0].iter().for_each(|i|
-      imm.insert(i, (self.imm & (0xFF << i * 8)) >> (i * 8))
-    );
-    [opreg, off, imm].concat()
+  pub fn serialize(&self) -> [u8; 8] {
+    [
+      self.op,
+      self.reg,
+      (self.off >> 8) as u8,
+      self.off as u8,
+      (self.imm >> 24) as u8,
+      (self.imm >> 16) as u8,
+      (self.imm >> 8) as u8,
+      self.imm as u8,
+    ]
   }
 }
 
@@ -68,62 +67,38 @@ impl From<Reg> for u8 {
 }
 
 #[derive(Debug)]
-pub enum Class {
-  Ld     ,
-  Ldx    ,
-  St     ,
-  Stx    ,
-  Alu    ,
-  Jmp    ,
-  Jmp32  ,
-  Alu64  ,
+pub enum Opcode {
+  Ld(Mode, Size),
+  Ldx(Mode, Size),
+  St(Mode, Size),
+  Stx(Mode, Size),
+  Alu(Alu, Src),
+  Jmp(Jmp, Src),
+  Jmp32(Jmp, Src),
+  Alu64(Alu, Src),
 }
 
-impl From<Class> for u8 {
-  fn from(c: Class) -> u8 {
-    match c {
-      Class::Ld    => 0x00 ,
-      Class::Ldx   => 0x01 ,
-      Class::St    => 0x02 ,
-      Class::Stx   => 0x03 ,
-      Class::Alu   => 0x04 ,
-      Class::Jmp   => 0x05 ,
-      Class::Jmp32 => 0x06 ,
-      Class::Alu64 => 0x07 ,
+impl From<Opcode> for u8 {
+  fn from(o: Opcode) -> u8 {
+    match o {
+      Opcode::Ld(mode, size)  => u8::from(mode) | u8::from(size) | 0x00,
+      Opcode::Ldx(mode, size) => u8::from(mode) | u8::from(size) | 0x01,
+      Opcode::St(mode, size)  => u8::from(mode) | u8::from(size) | 0x02,
+      Opcode::Stx(mode, size) => u8::from(mode) | u8::from(size) | 0x03,
+      Opcode::Alu(alu, src)   => u8::from(alu) | u8::from(src) | 0x04,
+      Opcode::Jmp(jmp, src)   => u8::from(jmp) | u8::from(src) | 0x05,
+      Opcode::Jmp32(jmp, src) => u8::from(jmp) | u8::from(src) | 0x06,
+      Opcode::Alu64(alu, src) => u8::from(alu) | u8::from(src) | 0x07,
     }
   }
 }
 
-#[derive(Debug)]
-pub struct Opcode(u8);
-
-#[derive(Debug)]
-pub struct AluJmp(u8);
-
-impl AluJmp {
-  #[inline(always)]
-  fn code(self) -> u8 {
-    (self.0 & 0xF0) >> 4
-  }
-
-  #[inline(always)]
-  fn source(self) -> u8 {
-    (self.0 & 0x08) >> 3
-  }
-
-  #[inline(always)]
-  fn class(self) -> u8 {
-    self.0 & 0x07
-  }
-}
-
-impl From<AluJmp> for Opcode {
-  fn from(o: AluJmp) -> Self { Opcode(o.0) }
-}
-
+/// 4th bit encodes source operand
 #[derive(Debug)]
 pub enum Src {
+  /// use 32-bit immediate as source operand
   K,
+  /// use 'src_reg' register as source operand
   X,
 }
 
@@ -154,13 +129,6 @@ pub enum Alu {
   End ,
 }
 
-impl Alu {
-  #[inline(always)]
-  fn make(self, source: Src) -> AluJmp {
-    AluJmp(u8::from(self) | u8::from(source) | u8::from(Class::Alu64))
-  }
-}
-
 impl From<Alu> for u8 {
   fn from(o: Alu) -> Self {
     match o {
@@ -189,22 +157,24 @@ pub enum Jmp {
   Jgt,
   Jge,
   Jset,
-  Jne,  /* eBPF only: jump != */
-  Jsgt, /* eBPF only: signed '>' */
-  Jsge, /* eBPF only: signed '>=' */
-  Call, /* eBPF BPF_JMP only: function call */
-  Exit, /* eBPF BPF_JMP only: function return */
-  Jlt,  /* eBPF only: unsigned '<' */
-  Jle,  /* eBPF only: unsigned '<=' */
-  Jslt, /* eBPF only: signed '<' */
-  Jsle, /* eBPF only: signed '<=' */
-}
-
-impl Jmp {
-  #[inline(always)]
-  fn make(self, source: Src) -> AluJmp {
-    AluJmp(u8::from(self) | u8::from(source) | u8::from(Class::Jmp64))
-  }
+  /// eBPF only: jump !=
+  Jne,
+  /// eBPF only: signed '>'
+  Jsgt,
+  /// eBPF only: signed '>='
+  Jsge,
+  /// eBPF BPF_JMP only: function call
+  Call,
+  /// eBPF BPF_JMP only: function return
+  Exit,
+  /// eBPF only: unsigned '<'
+  Jlt,
+  /// eBPF only: unsigned '<='
+  Jle,
+  /// eBPF only: signed '<'
+  Jslt,
+  /// eBPF only: signed '<='
+  Jsle,
 }
 
 impl From<Jmp> for u8 {
@@ -229,35 +199,96 @@ impl From<Jmp> for u8 {
 }
 
 #[derive(Debug)]
-pub struct StLd(u8);
+pub enum Size {
+  /// word
+  W,
+  /// half word
+  H,
+  /// byte
+  B,
+  /// eBPF only, double word
+  DW,
+}
 
-impl StLd {
-  #[inline(always)]
-  fn mode(self) -> u8 {
-    (self.0 & 0xE0) >> 5
-  }
-
-  #[inline(always)]
-  fn size(self) -> u8 {
-    (self.0 & 0x18) >> 3
-  }
-
-  #[inline(always)]
-  fn class(self) -> u8 {
-    self.0 & 0x07
+impl From<Size> for u8 {
+  fn from(s: Size) -> Self {
+    match s {
+      Size::W  => 0x00, /* word */
+      Size::H  => 0x08, /* half word */
+      Size::B  => 0x10, /* byte */
+      Size::DW => 0x18, /* eBPF only, double word */
+    }
   }
 }
 
-impl From<StLd> for Opcode {
-  fn from(o: StLd) -> Self { Opcode(o.0) }
+#[derive(Debug)]
+pub enum Mode {
+  Imm, /* used for 32-bit mov in classic BPF and 64-bit in eBPF */
+  Abs,
+  Ind,
+  Mem,
+  Len, /* classic BPF only, reserved in eBPF */
+  Msh, /* classic BPF only, reserved in eBPF */
+  Xadd, /* eBPF only, exclusive add */
+}
+
+impl From<Mode> for u8 {
+  fn from(m: Mode) -> Self {
+    match m {
+      Mode::Imm  => 0x00, /* used for 32-bit mov in classic BPF and 64-bit in eBPF */
+      Mode::Abs  => 0x20,
+      Mode::Ind  => 0x40,
+      Mode::Mem  => 0x60,
+      Mode::Len  => 0x80, /* classic BPF only, reserved in eBPF */
+      Mode::Msh  => 0xa0, /* classic BPF only, reserved in eBPF */
+      Mode::Xadd => 0xc0, /* eBPF only, exclusive add */
+    }
+  }
 }
 
 #[cfg(test)]
 mod test {
-  use super::*;
-  fn encode() {
-    let insn = Insn::new(Jmp::Exit, Reg::R0, 0, 0, 0)
-    assert_eq!()
-    asm::Insn{ op: 0x05 | 0x90, reg: 0, off: 0, imm: 0 },
+  use super::{
+    Insn,
+    Opcode::*,
+    Reg::*,
+    Alu::*,
+    Jmp::*,
+    Src::*,
+    Mode::*,
+    Size::*,
+  };
+  #[test]
+  fn encode_alu() {
+    assert_eq!(
+      Insn::new(Alu64(Mov, K), R0, R0, 0, !1 + 1).serialize(),
+      [0xb7, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff]
+    );
+  }
+
+  #[test]
+  fn encode_jmp() {
+    assert_eq!(
+      Insn::new(Jmp(Exit, K), R0, R0, 0, 0).serialize(),
+      [0x95, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+    );
+  }
+
+  #[test]
+  fn encode_st() {
+    assert_eq!(
+      Insn::new(St(Imm, DW), R0, R0, 0, 1).serialize(),
+      [0x00 | 0x18 | 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01]
+    );
+  }
+
+  /// eBPF has two non-generic instructions: (BPF_ABS | <size> | BPF_LD) and
+  /// (BPF_IND | <size> | BPF_LD) which are used to access packet data.
+  #[test]
+  fn encode_ld() {
+    assert_eq!(
+      Insn::new(Ld(Ind, H), R0, R0, 0, 1).serialize(),
+      [0x40 | 0x08 | 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01]
+    );
   }
 }

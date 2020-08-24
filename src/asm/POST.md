@@ -68,9 +68,36 @@ op:8, dst_reg:4, src_reg:4, off:16, imm:32
 
 ## 
 
-eBPFの命令は階層構造になっている
+eBPFの命令の種類をクラス(BPF_CLASS)と呼ぶ。
 
+* BPF_LD
+* BPF_LDX
+* BPF_ST
+* BPF_STX
+* BPF_ALU
+* BPF_JMP
+* BPF_JMP32
+* BPF_ALU64
 
+これらには暗黙的にグループ分けが存在しており、そのグループによって opcode フィールドの形式がやや異なる。
+
+arithmetic and jump
+```
+  +----------------+--------+--------------------+
+  |   4 bits       |  1 bit |   3 bits           |
+  | operation code | source | instruction class  |
+  +----------------+--------+--------------------+
+  (MSB)                                      (LSB)
+```
+
+load and store
+```
+  +--------+--------+-------------------+
+  | 3 bits | 2 bits |   3 bits          |
+  |  mode  |  size  | instruction class |
+  +--------+--------+-------------------+
+  (MSB)                             (LSB)
+```
 
 program = { instruction }
 instruction = 

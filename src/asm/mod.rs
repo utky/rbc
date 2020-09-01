@@ -5,12 +5,12 @@
 pub struct Insn {
   op: u8,
   reg: u8,
-  off: u16,
-  imm: u32
+  off: i16,
+  imm: i32
 }
 
 impl Insn {
-  pub fn new(op: Opcode, dst_reg: Reg, src_reg: Reg, off: u16, imm: u32) -> Insn {
+  pub fn new(op: Opcode, dst_reg: Reg, src_reg: Reg, off: i16, imm: i32) -> Insn {
     Insn {
       op: u8::from(op),
       reg: u8::from(dst_reg) << 4 | u8::from(src_reg),
@@ -85,10 +85,10 @@ impl From<Opcode> for u8 {
       Opcode::Ldx(mode, size) => u8::from(mode) | u8::from(size) | 0x01,
       Opcode::St(mode, size)  => u8::from(mode) | u8::from(size) | 0x02,
       Opcode::Stx(mode, size) => u8::from(mode) | u8::from(size) | 0x03,
-      Opcode::Alu(alu, src)   => u8::from(alu) | u8::from(src) | 0x04,
-      Opcode::Jmp(jmp, src)   => u8::from(jmp) | u8::from(src) | 0x05,
-      Opcode::Jmp32(jmp, src) => u8::from(jmp) | u8::from(src) | 0x06,
-      Opcode::Alu64(alu, src) => u8::from(alu) | u8::from(src) | 0x07,
+      Opcode::Alu(alu, src)   => u8::from(alu)  | u8::from(src)  | 0x04,
+      Opcode::Jmp(jmp, src)   => u8::from(jmp)  | u8::from(src)  | 0x05,
+      Opcode::Jmp32(jmp, src) => u8::from(jmp)  | u8::from(src)  | 0x06,
+      Opcode::Alu64(alu, src) => u8::from(alu)  | u8::from(src)  | 0x07,
     }
   }
 }
@@ -105,8 +105,8 @@ pub enum Src {
 impl From<Src> for u8 {
   fn from(s: Src) -> Self {
     match s {
-      Src::K   => 0x00,
-      Src::X   => 0x08,
+      Src::K => 0x00,
+      Src::X => 0x08,
     }
   }
 }
@@ -126,7 +126,7 @@ pub enum Alu {
   Xor ,
   Mov ,
   Arsh,
-  End ,
+  End(Endiness),
 }
 
 impl From<Alu> for u8 {
@@ -145,7 +145,22 @@ impl From<Alu> for u8 {
       Alu::Xor   => 0xa0,
       Alu::Mov   => 0xb0, /* eBPF only: mov reg to reg */
       Alu::Arsh  => 0xc0, /* eBPF only: sign extending shift right */
-      Alu::End   => 0xd0, /* eBPF only: endianness conversion */
+      Alu::End(endiness)   => 0xd0 | u8::from(endiness), /* eBPF only: endianness conversion */
+    }
+  }
+}
+
+#[derive(Debug)]
+pub enum Endiness {
+  Le,
+  Be,
+}
+
+impl From<Endiness> for u8 {
+  fn from(o: Endiness) -> Self {
+    match o {
+      Endiness::Le => 0x00,
+      Endiness::Be => 0x08,
     }
   }
 }

@@ -18,6 +18,8 @@ use std::mem::{
 };
 
 mod asm;
+mod map;
+mod syscall;
 
 const LICENSE_BUF_SIZE: usize = 128;
 const LOG_BUF_FIZE: usize = 4096;
@@ -102,7 +104,7 @@ impl BpfProg {
 
 
  /* anonymous struct used by BPF_PROG_LOAD command */
- #[derive(Debug)]
+#[derive(Debug)]
 #[repr(C)]
 struct BpfLoadAttr {
   prog_type: u32,

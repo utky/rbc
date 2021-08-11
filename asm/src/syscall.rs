@@ -1,5 +1,4 @@
-use libc::{syscall};
-use std::os::unix::io::{RawFd};
+use libc::{syscall, c_int};
 use std::io::{Result, Error, ErrorKind};
 
 //    struct { /* anonymous struct used by BPF_MAP_CREATE command */
@@ -19,7 +18,7 @@ use std::io::{Result, Error, ErrorKind};
 #[derive(Debug)]
 #[repr(C)]
 struct BpfAttrMapCreate {
-  map_fd: RawFd,
+  map_fd: c_int,
   key_size: usize,
   value_size: usize,
   max_entries: usize,
@@ -39,7 +38,7 @@ struct BpfAttrMapCreate {
 #[derive(Debug)]
 #[repr(C)]
 struct BpfAttrMapElem {
-  map_fd: RawFd,
+  map_fd: c_int,
   key: u64,
   value: u64,
   flags: u64,
@@ -49,5 +48,3 @@ union MapKey {
   value: u64,
   next_key: u64,
 }
-
-fn bpf_map_create(attr: libc::bpf)
